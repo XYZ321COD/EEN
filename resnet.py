@@ -10,8 +10,7 @@ class ResNet(nn.Module):
                             "resnet50": models.resnet50(pretrained=pretrained, num_classes=out_dim)}
 
         self.backbone = self._get_basemodel(base_model)
-        if args.accm:
-            self.backbone.conv1 = AccmBlock(self.backbone.conv1, 32, 4)
+        self.args = args
         # self.backbone.conv1 = nn.Conv2d(3, 64, 3, stride=(2, 2), padding=(3, 3), bias=False)
     def _get_basemodel(self, model_name):
         try:
@@ -23,13 +22,23 @@ class ResNet(nn.Module):
             return model
 
     def forward(self, x):
+        if self.args.save_feature_map:
+            self.outputconv1 = self.backbone.conv1(x)
         x = self.backbone(x)
         return x
+
+    def replace_with_accm(self):
+        if self.args.accm:
+            self.backbone.conv1 = AccmBlock(self.backbone.conv1, self.args.h_channels, self.args.number_of_rsacm)
+        else:
+            nn.init.xavier_uniform(self.backbone.conv1.weight.data)
+
+
 
 
 class RsacmBlock(nn.Module):
     def __init__(self, input_layer: nn.Conv2d, h_channels):
-        super(RsacmBlock, self).__init__()
+        super().__init__()
         self.h_channels = h_channels
         self.in_channels = input_layer.in_channels
         self.out_channels = input_layer.out_channels
@@ -40,7 +49,7 @@ class RsacmBlock(nn.Module):
         self.bias = input_layer.bias
         self.padding_mode = input_layer.padding_mode
         self.dilation = input_layer.dilation
-        self.conv1 = nn.Conv2d(self.in_channels, self.h_channels, 1 , stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups, bias=self.bias, padding_mode=self.padding_mode).cuda()
+        self.conv1 = nn.Conv2d(self.in_channels, self.h_channels, 1 , stride=1, padding=0, dilation=self.dilation, groups=self.groups, bias=self.bias, padding_mode=self.padding_mode).cuda() # Co zrobic z paddingiem i stridem?
         self.conv2 = nn.Conv2d(self.h_channels, self.out_channels, self.kernel_size , stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups, bias=self.bias, padding_mode=self.padding_mode).cuda()
 
 
@@ -51,10 +60,10 @@ class RsacmBlock(nn.Module):
 
 class AccmBlock(nn.Module):
     def __init__(self, input_layer, h_channels, number_of_rsacm):
-        super(AccmBlock, self).__init__()
+        super().__init__()
         self.h_channels = h_channels
         self.number_of_rsacm = number_of_rsacm
-        self.rsacm_list = [RsacmBlock(input_layer, self.h_channels) for i in range(0, self.number_of_rsacm)]
+        self.rsacm_list = nn.ModuleList([(RsacmBlock(input_layer, self.h_channels)) for i in range(0, self.number_of_rsacm)])
 
     def forward(self, x):
         x_copy = x.clone()
@@ -63,6 +72,17 @@ class AccmBlock(nn.Module):
             x += self.rsacm_list[i](x_copy)
         return x
 
+    def override_forward(self, number_of_rsacm_to_use):
+        self.number_of_rsacm_to_use = number_of_rsacm_to_use
+        self.old_forward = self.forward
+        self.forward = self.forward_partial
 
-
-AccmBlock(nn.Conv2d(3, 64, 3, stride=(2, 2), padding=(3, 3), bias=False), 10, 3)
+    def reset_forward(self):
+        self.forward = self.old_forward
+        
+    def forward_partial(self, x):
+        x_copy = x.clone()
+        x = self.rsacm_list[0](x_copy)
+        for i in range(1, self.number_of_rsacm_to_use):
+            x += self.rsacm_list[i](x_copy)
+        return x

@@ -47,6 +47,10 @@ parser.add_argument('--pretrained', action='store_true', help='use pretrained ne
 parser.add_argument('--accm', action='store_true', help='use accm layer')
 parser.add_argument('--save_point', default=".", type=str, help="Path to .pth ")
 parser.add_argument('--load_model', default=False, action="store_true",help="Use pretrained model")
+parser.add_argument('--save_feature_map', action="store_true",help="save_feature_map")
+parser.add_argument('--h_channels', default=32, type=int,help="h_channels")
+parser.add_argument('--number_of_rsacm', default=1, type=int,help="number_of_rsacm")
+parser.add_argument('--train_rsacm', action="store_true",help="train_rsacm")
 
 def main():
     args = parser.parse_args()
@@ -70,13 +74,13 @@ def main():
     model = ResNet(base_model=args.arch, out_dim=args.num_classes, pretrained=args.pretrained, args=args)
 
     if args.load_model:
-        model_file = glob.glob(args.save_point + "/*.pt")
+        model_file = glob.glob(args.save_point + "/*.tar")
         print(f'Using Pretrained model {model_file[0]}')
         checkpoint = torch.load(model_file[0])
-        model.backbone.load_state_dict(checkpoint)
+        model.load_state_dict(checkpoint['state_dict'])
+    
+    model.replace_with_accm()
 
-
-    print(args)
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=0,
