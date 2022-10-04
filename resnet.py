@@ -1,7 +1,19 @@
 import torch.nn as nn
 import torchvision.models as models
-
+from operator import attrgetter
 class ResNet(nn.Module):
+
+
+    def layers_to_replace(self):
+        self.dict_ = {
+            0: ("conv1", self.args.h_channels, self.args.number_of_rsacm),
+            1: ("layer1", '0', "conv2", self.args.h_channels, self.args.number_of_rsacm),
+        }
+    def get_activation(self, name):
+        def hook(model, input, output):
+            self.activation[name] = output
+        return hook
+
 
     def __init__(self, base_model, out_dim, pretrained, args=None):
         super(ResNet, self).__init__()
@@ -9,9 +21,10 @@ class ResNet(nn.Module):
                             "resnet34": models.resnet34(pretrained=pretrained, num_classes=out_dim),
                             "resnet50": models.resnet50(pretrained=pretrained, num_classes=out_dim)}
 
+        self.activation = {}
+
         self.backbone = self._get_basemodel(base_model)
         self.args = args
-        # self.backbone.conv1 = nn.Conv2d(3, 64, 3, stride=(2, 2), padding=(3, 3), bias=False)
     def _get_basemodel(self, model_name):
         try:
             model = self.resnet_dict[model_name]
@@ -27,14 +40,21 @@ class ResNet(nn.Module):
         x = self.backbone(x)
         return x
 
+
+    def register_all_hooks(self):
+        for idx, (key, value) in enumerate(self.dict_.items()):
+            if len(value) == 3:
+                self.backbone._modules[value[0]].register_forward_hook(self.get_activation(idx))
+            if len(value) == 5:
+                self.backbone._modules[value[0]]._modules[value[1]]._modules[value[2]].register_forward_hook(self.get_activation(idx))
+
     def replace_with_accm(self):
-        if self.args.accm:
-            self.backbone.conv1 = AccmBlock(self.backbone.conv1, self.args.h_channels, self.args.number_of_rsacm)
-        else:
-            nn.init.xavier_uniform(self.backbone.conv1.weight.data)
-
-
-
+        self.layers_to_replace()
+        for key, value in self.dict_.items():
+            if len(value) == 3:
+                self.backbone._modules[value[0]] = AccmBlock(self.backbone._modules[value[0]], self.args.h_channels, self.args.number_of_rsacm)
+            if len(value) == 5:
+                self.backbone._modules[value[0]]._modules[value[1]]._modules[value[2]] = AccmBlock(self.backbone._modules[value[0]]._modules[value[1]]._modules[value[2]], self.args.h_channels, self.args.number_of_rsacm)
 
 class RsacmBlock(nn.Module):
     def __init__(self, input_layer: nn.Conv2d, h_channels):

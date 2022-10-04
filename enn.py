@@ -49,6 +49,8 @@ class ENN(object):
         self.criterion = torch.nn.CrossEntropyLoss().to(self.args.device)
         self.criterion_distilation = torch.nn.MSELoss().to(self.args.device)
         self.teacher_model = self.load_teacher_model(self.args)
+        self.teacher_model.layers_to_replace()
+        self.teacher_model.register_all_hooks()
         self.calculated_complexity()
 
     def eval(self, valid_loader, model):
@@ -109,9 +111,11 @@ class ENN(object):
                 if self.args.train_rsacm:
                     random_rsacm = torch.randint(1, self.model.backbone.conv1.number_of_rsacm+1, (1,))
                     self.model.backbone.conv1.override_forward(random_rsacm)
+                loss_distill = 0
                 outputs = self.model(images)
                 teacher_outputs = self.teacher_model(images)
-                loss_distill = self.criterion_distilation(self.model.outputconv1, self.teacher_model.outputconv1)
+                for key, value in self.model.activation.items():
+                    loss_distill += self.criterion_distilation(self.model.activation[key], self.teacher_model.activation[key])
                 self.optimizer.zero_grad()
                 loss_distill.backward()
                 self.optimizer.step()

@@ -80,6 +80,7 @@ def main():
         model.load_state_dict(checkpoint['state_dict'])
     
     model.replace_with_accm()
+    model.register_all_hooks()
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
 
