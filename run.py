@@ -3,9 +3,10 @@ import torch
 import torch.backends.cudnn as cudnn
 from torchvision import models
 from datasets import Dataset
-from resnet import ResNet
+from models.resnet import ResNet
 from enn import ENN
 import glob
+from utils.models import accmize_from
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
@@ -51,6 +52,9 @@ parser.add_argument('--save_feature_map', action="store_true",help="save_feature
 parser.add_argument('--h_channels', default=32, type=int,help="h_channels")
 parser.add_argument('--number_of_rsacm', default=1, type=int,help="number_of_rsacm")
 parser.add_argument('--train_rsacm', action="store_true",help="train_rsacm")
+parser.add_argument('--distill_type', default='',
+                    help='distill type', choices=['per_accm', 'per_rsacm'])
+
 
 def main():
     args = parser.parse_args()
@@ -71,25 +75,20 @@ def main():
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True, drop_last=True)
 
-    model = ResNet(base_model=args.arch, out_dim=args.num_classes, pretrained=args.pretrained, args=args)
+    teacher_model = ResNet(base_model=args.arch, out_dim=args.num_classes, pretrained=args.pretrained, args=args)
 
-    if args.load_model:
-        model_file = glob.glob(args.save_point + "/*.tar")
-        print(f'Using Pretrained model {model_file[0]}')
-        checkpoint = torch.load(model_file[0])
-        model.load_state_dict(checkpoint['state_dict'])
+    model_file = glob.glob("./pre-trained/resnet50" + "/*.tar")
+    print(f'Using Pretrained model {model_file[0]} for the teacher model')
+    checkpoint = torch.load(model_file[0])
+    teacher_model.load_state_dict(checkpoint['state_dict'])
     
-    model.replace_with_accm()
-    model.register_all_hooks()
-
-    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
-
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=0,
-                                                           last_epoch=-1)
+    example_input = next(iter(train_loader))[0][:1]
+    student_model = accmize_from(teacher_model, 0.25, args.number_of_rsacm, example_input)
+    optimizer = torch.optim.Adam(student_model.parameters(), args.lr, weight_decay=args.weight_decay)
 
     #  It’s a no-op if the 'gpu_index' argument is a negative integer or None.
     with torch.cuda.device(args.gpu_index):
-        simclr = ENN(model=model, optimizer=optimizer, scheduler=scheduler, args=args)
+        simclr = ENN(model=student_model, optimizer=optimizer, args=args)
         simclr.train(train_loader)
 
 
