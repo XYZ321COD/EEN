@@ -38,12 +38,13 @@ class AccmBlock(nn.Module):
             [(RsacmBlock(input_layer, self.h_channels)) for i in range(0, self.number_of_rsacm)])
 
     def forward(self, x):
+        x = x.detach() # Detach x make sure that gradient for this layer won't flow to previous layers.
         self.x_list = []
         x_copy = x.clone()
         x = self.rsacm_list[0](x_copy)
         self.x_list.append(x)
         for i in range(1, self.number_of_rsacm):
-            self.x_list.append(self.rsacm_list[i](x_copy))
+            self.x_list.append(self.rsacm_list[i](x_copy) + x.detach()) # Detach x before adding it to the sum 
             x = self.rsacm_list[i](x_copy) + x
         return x
 
@@ -56,6 +57,7 @@ class AccmBlock(nn.Module):
         self.forward = self.old_forward
 
     def forward_partial(self, x):
+        # Used only for evaluation!
         x_copy = x.clone()
         x = self.rsacm_list[0](x_copy)
         for i in range(1, self.number_of_rsacm_to_use):

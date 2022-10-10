@@ -28,7 +28,8 @@ class ENN(object):
         self.teacher_model.register_all_hooks()
         self.model.register_all_hooks()
         calculated_complexity(self.model, self.teacher_model)
-
+        self.teacher_model.eval()
+        self.model.eval()
 
     def train(self, train_loader):
         torch.autograd.set_detect_anomaly(True)
