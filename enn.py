@@ -31,7 +31,7 @@ class ENN(object):
         self.teacher_model.eval()
         self.model.eval()
 
-    def train(self, train_loader):
+    def train(self, train_loader, valid_loader):
         torch.autograd.set_detect_anomaly(True)
         # scaler = GradScaler()
         save_config_file(self.writer.log_dir, self.args)
@@ -39,8 +39,8 @@ class ENN(object):
         n_iter = 0
         logging.info(f"Start training for {self.args.epochs} epochs.")
         logging.info(f"Training with gpu: {self.args.disable_cuda}.")
-        accuracy_student = eval(train_loader, self.model, self.args)
-        accuracy_teacher = eval(train_loader, self.teacher_model, self.args)
+        accuracy_student = eval(valid_loader, self.model, self.args)
+        accuracy_teacher = eval(valid_loader, self.teacher_model, self.args)
         logging.debug(f"Before Training student_model: \t Accuracy {accuracy_student}")
         logging.debug(f"Before Training teacher_model: \t Accuracy {accuracy_teacher}")
 
@@ -52,23 +52,18 @@ class ENN(object):
                 if self.args.train_rsacm:
                     random_rsacm = torch.randint(1, self.args.number_of_rsacm+1, (1,))
                     self.model.override_forward_for_accm_blocks(random_rsacm)
-                outputs = self.model(images)
                 self.optimizer.zero_grad()
-
                 teacher_outputs = self.teacher_model(images)
                 if self.args.distill_type == 'per_accm':
                     loss_distill = 0
                     for key, value in self.model.activation.items():
-                        # print(self.model.activation[key].shape)
-                        # print(self.teacher_model.activation[key].shape)
                         loss_distill += self.criterion_distilation(self.model.activation[key], self.teacher_model.activation[key])
 
                 if self.args.distill_type == 'per_rsacm':
                     loss_distill = 0
                     for index, module_name in enumerate(self.model.replaced_modules):
+                        get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
                         for rsacm_block_output in get_module_by_name(self.model, module_name).x_list:
-                            # print(rsacm_block_output.shape)
-                            # print(self.teacher_model.activation[index].shape)
                             loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
 
                 loss_distill.backward()
@@ -81,11 +76,11 @@ class ENN(object):
                 
             # if self.args.train_rsacm:
             #     self.model.override_forward_for_accm_blocks(self.args.number_of_rsacm)
-            accuracy = eval(train_loader, self.model, self.args)
+            accuracy = eval(valid_loader, self.model, self.args)
             logging.debug(f"Epoch: {epoch_counter}\Loss: {loss_distill}\t")
             logging.debug(f"Epoch: {epoch_counter}\t Accuracy {accuracy}")
         for i in range(1, self.args.number_of_rsacm+1):
-            accuracy_partial = eval_partial(train_loader, self.model, i, self.args)
+            accuracy_partial = eval_partial(valid_loader, self.model, i, self.args)
             macs, _ = get_model_complexity_info(self.model, (3, 32, 32), as_strings=False,
                                            print_per_layer_stat=False, verbose=False)
             gflops = 2*macs

@@ -69,15 +69,21 @@ def main():
 
     dataset = Dataset(args.data)
 
-    train_dataset = dataset.get_dataset(args.dataset_name)
+    train_dataset = dataset.get_dataset(args.dataset_name, is_train=True)
 
+    valid_dataset = dataset.get_dataset(args.dataset_name, is_train=False)
+    
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True, drop_last=True)
 
+    valid_loader = torch.utils.data.DataLoader(
+        valid_dataset, batch_size=args.batch_size, shuffle=True,
+        num_workers=args.workers, pin_memory=True, drop_last=True)
+
     teacher_model = ResNet(base_model=args.arch, out_dim=args.num_classes, pretrained=args.pretrained, args=args)
 
-    model_file = glob.glob("./pre-trained/resnet50" + "/*.tar")
+    model_file = glob.glob("./pre-trained/resnet50_long" + "/*.tar")
     print(f'Using Pretrained model {model_file[0]} for the teacher model')
     checkpoint = torch.load(model_file[0])
     teacher_model.load_state_dict(checkpoint['state_dict'])
@@ -88,8 +94,8 @@ def main():
 
     #  It’s a no-op if the 'gpu_index' argument is a negative integer or None.
     with torch.cuda.device(args.gpu_index):
-        simclr = ENN(model=student_model, optimizer=optimizer, args=args)
-        simclr.train(train_loader)
+        enn = ENN(model=student_model, optimizer=optimizer, args=args)
+        enn.train(train_loader, valid_loader)
 
 
 if __name__ == "__main__":

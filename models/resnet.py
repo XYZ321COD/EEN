@@ -11,6 +11,7 @@ class ResNet(nn.Module):
     def get_activation(self, name):
         def hook(model, input, output):
             self.activation[name] = output
+            self.inputs[name] = input
 
         return hook
 
@@ -21,6 +22,7 @@ class ResNet(nn.Module):
                             "resnet50": models.resnet50(pretrained=pretrained, num_classes=out_dim)}
 
         self.activation = {}
+        self.inputs = {}
 
         self.backbone = self._get_basemodel(base_model)
         self.args = args
@@ -51,7 +53,7 @@ def load_teacher_model(args):
     args_copy.accm = False
     
     teacher_model = ResNet(base_model=args_copy.arch, out_dim=args_copy.num_classes, pretrained=args_copy.pretrained, args=args_copy).cuda()
-    model_file = glob.glob("./pre-trained/resnet50" + "/*.tar")
+    model_file = glob.glob("./pre-trained/resnet50_long" + "/*.tar")
     print(f'Using Pretrained model {model_file[0]}')
     checkpoint = torch.load(model_file[0])
     teacher_model.load_state_dict(checkpoint['state_dict'])
