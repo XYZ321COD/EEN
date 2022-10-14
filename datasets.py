@@ -22,13 +22,13 @@ class Dataset:
         return data_transforms
 
     def get_dataset(self, name, is_train=True):
-        valid_datasets = {'cifar10': lambda: datasets.CIFAR10(self.root_folder, train=is_train,
+        data_set = {'cifar10': lambda: datasets.CIFAR10(self.root_folder, train=is_train,
                                                               transform=self.get_transform(is_train),
                                                               download=True),
                                                                                 
         }
         try:
-            dataset_fn = valid_datasets[name]
+            dataset_fn = data_set[name]
         except KeyError:
             raise ValueError()
         else:
