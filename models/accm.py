@@ -44,8 +44,9 @@ class AccmBlock(nn.Module):
         x = self.rsacm_list[0](x_copy)
         self.x_list.append(x)
         for i in range(1, self.number_of_rsacm):
-            self.x_list.append(self.rsacm_list[i](x_copy) + x.detach()) # Detach x before adding it to the sum 
-            x = self.rsacm_list[i](x_copy) + x
+            rsacm_output = self.rsacm_list[i](x_copy)
+            self.x_list.append(rsacm_output + x.detach()) # Detach x before adding it to the sum 
+            x = rsacm_output + x
         return x
 
     def override_forward(self, number_of_rsacm_to_use):
