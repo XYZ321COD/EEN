@@ -73,7 +73,7 @@ def eval(valid_loader, model, args):
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
-    print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+    print(f'Accuracy of the network on the test images: {100 * correct // total} %')
     return 100 * correct // total
 
 
@@ -91,7 +91,7 @@ def eval_partial(valid_loader, model, number_of_rscam_to_eval, args):
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
-    print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+    print(f'Accuracy of the network on the test images: {100 * correct // total} %')
     return 100 * correct // total
 
 

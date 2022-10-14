@@ -3,10 +3,11 @@ import torch
 import torch.backends.cudnn as cudnn
 from torchvision import models
 from datasets import Dataset
-from models.resnet import ResNet
+from models.resnet import ResNet50
 from enn import ENN
 import glob
 from utils.models import accmize_from
+import pathlib
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
@@ -54,9 +55,14 @@ parser.add_argument('--number_of_rsacm', default=1, type=int,help="number_of_rsa
 parser.add_argument('--train_rsacm', action="store_true",help="train_rsacm")
 parser.add_argument('--distill_type', default='',
                     help='distill type', choices=['per_accm', 'per_rsacm'])
+parser.add_argument('--inference', action="store_true",help="train_rsacm")
+parser.add_argument('--load_student', action="store_true",help="train_rsacm")
+
 
 
 def main():
+    temp = pathlib.PosixPath
+    pathlib.PosixPath = pathlib.WindowsPath
     args = parser.parse_args()
     if not args.disable_cuda and torch.cuda.is_available():
         args.device = torch.device('cuda')
@@ -72,7 +78,7 @@ def main():
     train_dataset = dataset.get_dataset(args.dataset_name, is_train=True)
 
     valid_dataset = dataset.get_dataset(args.dataset_name, is_train=False)
-    
+
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True, drop_last=True)
@@ -81,21 +87,29 @@ def main():
         valid_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True, drop_last=True)
 
-    teacher_model = ResNet(base_model=args.arch, out_dim=args.num_classes, pretrained=args.pretrained, args=args)
-
-    model_file = glob.glob("./pre-trained/resnet50_long" + "/*.tar")
+    teacher_model = ResNet50()
+    print(teacher_model)
+    model_file = glob.glob("./pre-trained/resnet_bartek" + "/*.pth")
     print(f'Using Pretrained model {model_file[0]} for the teacher model')
     checkpoint = torch.load(model_file[0])
-    teacher_model.load_state_dict(checkpoint['state_dict'])
+    teacher_model.load_state_dict(checkpoint['model_state'])
     
     example_input = next(iter(train_loader))[0][:1]
     student_model = accmize_from(teacher_model, 0.25, args.number_of_rsacm, example_input)
-    optimizer = torch.optim.Adam(student_model.parameters(), args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(student_model.parameters(), args.lr, weight_decay=0)
 
+    if args.load_student:
+        model_file = glob.glob("./pre-trained/Oct13_17-05-07_DESKTOP-300CBSN" + "/*.tar")
+        print(f'Using Pretrained model {model_file[0]} for the teacher model')
+        checkpoint = torch.load(model_file[0])
+        student_model.load_state_dict(checkpoint['state_dict'])
     #  It’s a no-op if the 'gpu_index' argument is a negative integer or None.
     with torch.cuda.device(args.gpu_index):
         enn = ENN(model=student_model, optimizer=optimizer, args=args)
-        enn.train(train_loader, valid_loader)
+        if args.inference:
+            enn.inference(train_loader, valid_loader)
+        else:
+            enn.train(train_loader, valid_loader)
 
 
 if __name__ == "__main__":

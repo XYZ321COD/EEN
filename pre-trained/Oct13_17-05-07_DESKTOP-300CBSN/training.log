@@ -1,0 +1,85 @@
+DEBUG:root:Computational complexity for student model: 6749745172.0 FLOPS
+DEBUG:root:Computational complexity for teacher model: 2609389588.0 FLOPS
+INFO:root:Start training for 35 epochs.
+INFO:root:Training with gpu: False.
+DEBUG:root:Before Training student_model: 	 Accuracy 9
+DEBUG:root:Before Training teacher_model: 	 Accuracy 93
+DEBUG:root:Epoch: 0\Loss: 2.926645517349243	
+DEBUG:root:Epoch: 0	 Accuracy 70
+DEBUG:root:Epoch: 1\Loss: 1.4636189937591553	
+DEBUG:root:Epoch: 1	 Accuracy 85
+DEBUG:root:Epoch: 2\Loss: 0.8767560720443726	
+DEBUG:root:Epoch: 2	 Accuracy 88
+DEBUG:root:Epoch: 3\Loss: 0.6071852445602417	
+DEBUG:root:Epoch: 3	 Accuracy 89
+DEBUG:root:Epoch: 4\Loss: 0.4287737309932709	
+DEBUG:root:Epoch: 4	 Accuracy 90
+DEBUG:root:Epoch: 5\Loss: 0.3396011292934418	
+DEBUG:root:Epoch: 5	 Accuracy 91
+DEBUG:root:Epoch: 6\Loss: 0.25020405650138855	
+DEBUG:root:Epoch: 6	 Accuracy 91
+DEBUG:root:Epoch: 7\Loss: 0.19271424412727356	
+DEBUG:root:Epoch: 7	 Accuracy 92
+DEBUG:root:Epoch: 8\Loss: 0.15631791949272156	
+DEBUG:root:Epoch: 8	 Accuracy 92
+DEBUG:root:Epoch: 9\Loss: 0.11943643540143967	
+DEBUG:root:Epoch: 9	 Accuracy 92
+DEBUG:root:Epoch: 10\Loss: 0.10558823496103287	
+DEBUG:root:Epoch: 10	 Accuracy 92
+DEBUG:root:Epoch: 11\Loss: 0.09268001466989517	
+DEBUG:root:Epoch: 11	 Accuracy 92
+DEBUG:root:Epoch: 12\Loss: 0.07822360098361969	
+DEBUG:root:Epoch: 12	 Accuracy 92
+DEBUG:root:Epoch: 13\Loss: 0.07413622736930847	
+DEBUG:root:Epoch: 13	 Accuracy 93
+DEBUG:root:Epoch: 14\Loss: 0.06003032624721527	
+DEBUG:root:Epoch: 14	 Accuracy 93
+DEBUG:root:Epoch: 15\Loss: 0.049498505890369415	
+DEBUG:root:Epoch: 15	 Accuracy 93
+DEBUG:root:Epoch: 16\Loss: 0.04546315222978592	
+DEBUG:root:Epoch: 16	 Accuracy 93
+DEBUG:root:Epoch: 17\Loss: 0.040081895887851715	
+DEBUG:root:Epoch: 17	 Accuracy 93
+DEBUG:root:Epoch: 18\Loss: 0.03830235078930855	
+DEBUG:root:Epoch: 18	 Accuracy 93
+DEBUG:root:Epoch: 19\Loss: 0.0341377817094326	
+DEBUG:root:Epoch: 19	 Accuracy 93
+DEBUG:root:Epoch: 20\Loss: 0.03359179571270943	
+DEBUG:root:Epoch: 20	 Accuracy 93
+DEBUG:root:Epoch: 21\Loss: 0.03046935610473156	
+DEBUG:root:Epoch: 21	 Accuracy 93
+DEBUG:root:Epoch: 22\Loss: 0.029392965137958527	
+DEBUG:root:Epoch: 22	 Accuracy 93
+DEBUG:root:Epoch: 23\Loss: 0.02300621196627617	
+DEBUG:root:Epoch: 23	 Accuracy 93
+DEBUG:root:Epoch: 24\Loss: 0.024249617010354996	
+DEBUG:root:Epoch: 24	 Accuracy 93
+DEBUG:root:Epoch: 25\Loss: 0.027075961232185364	
+DEBUG:root:Epoch: 25	 Accuracy 93
+DEBUG:root:Epoch: 26\Loss: 0.023817172273993492	
+DEBUG:root:Epoch: 26	 Accuracy 93
+DEBUG:root:Epoch: 27\Loss: 0.01970718801021576	
+DEBUG:root:Epoch: 27	 Accuracy 93
+DEBUG:root:Epoch: 28\Loss: 0.01916385069489479	
+DEBUG:root:Epoch: 28	 Accuracy 93
+DEBUG:root:Epoch: 29\Loss: 0.021424083039164543	
+DEBUG:root:Epoch: 29	 Accuracy 93
+DEBUG:root:Epoch: 30\Loss: 0.01969522424042225	
+DEBUG:root:Epoch: 30	 Accuracy 93
+DEBUG:root:Epoch: 31\Loss: 0.017565840855240822	
+DEBUG:root:Epoch: 31	 Accuracy 93
+DEBUG:root:Epoch: 32\Loss: 0.017453400418162346	
+DEBUG:root:Epoch: 32	 Accuracy 93
+DEBUG:root:Epoch: 33\Loss: 0.01713414117693901	
+DEBUG:root:Epoch: 33	 Accuracy 93
+DEBUG:root:Epoch: 34\Loss: 0.019165394827723503	
+DEBUG:root:Epoch: 34	 Accuracy 93
+DEBUG:root:Computational complexity for student model: 1754681364.0 FLOPS when using 1 number of rsacm: Accuracy 91
+DEBUG:root:Computational complexity for student model: 2111471636.0 FLOPS when using 2 number of rsacm: Accuracy 93
+DEBUG:root:Computational complexity for student model: 2468261908.0 FLOPS when using 3 number of rsacm: Accuracy 93
+DEBUG:root:Computational complexity for student model: 2825052180.0 FLOPS when using 4 number of rsacm: Accuracy 93
+DEBUG:root:Computational complexity for student model: 3181842452.0 FLOPS when using 5 number of rsacm: Accuracy 93
+DEBUG:root:Computational complexity for student model: 3538632724.0 FLOPS when using 6 number of rsacm: Accuracy 93
+DEBUG:root:Computational complexity for student model: 3895422996.0 FLOPS when using 7 number of rsacm: Accuracy 93
+DEBUG:root:Computational complexity for student model: 4252213268.0 FLOPS when using 8 number of rsacm: Accuracy 93
+INFO:root:Model checkpoint and metadata has been saved at runs\Oct13_17-05-07_DESKTOP-300CBSN.

@@ -10,8 +10,8 @@ from models.resnet import load_teacher_model
 import glob
 from copy import copy
 from ptflops import get_model_complexity_info
-
-
+import matplotlib.pyplot as plt 
+import numpy as np 
 class ENN(object):
 
 
@@ -31,6 +31,40 @@ class ENN(object):
         self.teacher_model.eval()
         self.model.eval()
 
+
+
+    def inference(self, train_loader, valid_loader):
+        losses_per_layers_student = {module_name: [[] for i in range(0,self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
+        for i, (images, labels) in enumerate(tqdm(train_loader)):
+                images, labels = images.to(self.args.device), labels.to(self.args.device)
+
+                loss_distill = 0
+                for index, module_name in enumerate(self.model.replaced_modules):
+                    get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
+                    for rsacm_index, rsacm_block_output in enumerate(get_module_by_name(self.model, module_name).x_list):
+                        loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
+                        losses_per_layers_student[module_name][rsacm_index].append(self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index]))
+        # print(losses_per_layers_student)
+        losses_per_layers_student_mean = {module_name: [(sum(losses_per_layers_student[module_name][i]) / len(losses_per_layers_student[module_name][i])).item() for i in range(0, self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
+        print(losses_per_layers_student_mean)
+        for module_name in losses_per_layers_student_mean:
+            # Make a random dataset:
+            rsacms = range(1, self.args.number_of_rsacm+1)
+            loss_value = losses_per_layers_student_mean[module_name]
+            y_pos = np.arange(len(rsacms))
+
+            # Create bars
+            plt.bar(y_pos, loss_value)
+
+            # Create names on the x-axis
+            plt.xticks(y_pos, rsacms)
+            plt.title(f'MSELoss in {module_name}')
+            plt.plot()
+            plt.xlabel('Number of RSACM')
+            plt.ylabel('MSELoss value')
+            plt.savefig(f'./graphs/{module_name}.png')
+            plt.clf()
+
     def train(self, train_loader, valid_loader):
         torch.autograd.set_detect_anomaly(True)
         # scaler = GradScaler()
@@ -49,10 +83,11 @@ class ENN(object):
 
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
                 # Changes number of rsacm 
-                if self.args.train_rsacm:
-                    random_rsacm = torch.randint(1, self.args.number_of_rsacm+1, (1,))
-                    self.model.override_forward_for_accm_blocks(random_rsacm)
+                # if self.args.train_rsacm:
+                #     random_rsacm = torch.randint(1, self.args.number_of_rsacm+1, (1,))
+                #     self.model.override_forward_for_accm_blocks(random_rsacm)
                 self.optimizer.zero_grad()
+
                 teacher_outputs = self.teacher_model(images)
                 if self.args.distill_type == 'per_accm':
                     loss_distill = 0
