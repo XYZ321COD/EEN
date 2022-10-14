@@ -10,8 +10,8 @@ from models.resnet import load_teacher_model
 import glob
 from copy import copy
 from ptflops import get_model_complexity_info
-
-
+import matplotlib.pyplot as plt 
+import numpy as np 
 class ENN(object):
 
 
@@ -28,9 +28,44 @@ class ENN(object):
         self.teacher_model.register_all_hooks()
         self.model.register_all_hooks()
         calculated_complexity(self.model, self.teacher_model)
+        self.teacher_model.eval()
+        self.model.eval()
 
 
-    def train(self, train_loader):
+
+    def inference(self, train_loader, valid_loader):
+        losses_per_layers_student = {module_name: [[] for i in range(0,self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
+        for i, (images, labels) in enumerate(tqdm(train_loader)):
+                images, labels = images.to(self.args.device), labels.to(self.args.device)
+
+                loss_distill = 0
+                for index, module_name in enumerate(self.model.replaced_modules):
+                    get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
+                    for rsacm_index, rsacm_block_output in enumerate(get_module_by_name(self.model, module_name).x_list):
+                        loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
+                        losses_per_layers_student[module_name][rsacm_index].append(self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index]))
+        # print(losses_per_layers_student)
+        losses_per_layers_student_mean = {module_name: [(sum(losses_per_layers_student[module_name][i]) / len(losses_per_layers_student[module_name][i])).item() for i in range(0, self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
+        print(losses_per_layers_student_mean)
+        for module_name in losses_per_layers_student_mean:
+            # Make a random dataset:
+            rsacms = range(1, self.args.number_of_rsacm+1)
+            loss_value = losses_per_layers_student_mean[module_name]
+            y_pos = np.arange(len(rsacms))
+
+            # Create bars
+            plt.bar(y_pos, loss_value)
+
+            # Create names on the x-axis
+            plt.xticks(y_pos, rsacms)
+            plt.title(f'MSELoss in {module_name}')
+            plt.plot()
+            plt.xlabel('Number of RSACM')
+            plt.ylabel('MSELoss value')
+            plt.savefig(f'./graphs/{module_name}.png')
+            plt.clf()
+
+    def train(self, train_loader, valid_loader):
         torch.autograd.set_detect_anomaly(True)
         # scaler = GradScaler()
         save_config_file(self.writer.log_dir, self.args)
@@ -38,8 +73,8 @@ class ENN(object):
         n_iter = 0
         logging.info(f"Start training for {self.args.epochs} epochs.")
         logging.info(f"Training with gpu: {self.args.disable_cuda}.")
-        accuracy_student = eval(train_loader, self.model, self.args)
-        accuracy_teacher = eval(train_loader, self.teacher_model, self.args)
+        accuracy_student = eval(valid_loader, self.model, self.args)
+        accuracy_teacher = eval(valid_loader, self.teacher_model, self.args)
         logging.debug(f"Before Training student_model: \t Accuracy {accuracy_student}")
         logging.debug(f"Before Training teacher_model: \t Accuracy {accuracy_teacher}")
 
@@ -48,26 +83,22 @@ class ENN(object):
 
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
                 # Changes number of rsacm 
-                if self.args.train_rsacm:
-                    random_rsacm = torch.randint(1, self.args.number_of_rsacm+1, (1,))
-                    self.model.override_forward_for_accm_blocks(random_rsacm)
-                outputs = self.model(images)
+                # if self.args.train_rsacm:
+                #     random_rsacm = torch.randint(1, self.args.number_of_rsacm+1, (1,))
+                #     self.model.override_forward_for_accm_blocks(random_rsacm)
                 self.optimizer.zero_grad()
 
                 teacher_outputs = self.teacher_model(images)
                 if self.args.distill_type == 'per_accm':
                     loss_distill = 0
                     for key, value in self.model.activation.items():
-                        # print(self.model.activation[key].shape)
-                        # print(self.teacher_model.activation[key].shape)
                         loss_distill += self.criterion_distilation(self.model.activation[key], self.teacher_model.activation[key])
 
                 if self.args.distill_type == 'per_rsacm':
                     loss_distill = 0
                     for index, module_name in enumerate(self.model.replaced_modules):
+                        get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
                         for rsacm_block_output in get_module_by_name(self.model, module_name).x_list:
-                            # print(rsacm_block_output.shape)
-                            # print(self.teacher_model.activation[index].shape)
                             loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
 
                 loss_distill.backward()
@@ -80,11 +111,11 @@ class ENN(object):
                 
             # if self.args.train_rsacm:
             #     self.model.override_forward_for_accm_blocks(self.args.number_of_rsacm)
-            accuracy = eval(train_loader, self.model, self.args)
+            accuracy = eval(valid_loader, self.model, self.args)
             logging.debug(f"Epoch: {epoch_counter}\Loss: {loss_distill}\t")
             logging.debug(f"Epoch: {epoch_counter}\t Accuracy {accuracy}")
         for i in range(1, self.args.number_of_rsacm+1):
-            accuracy_partial = eval_partial(train_loader, self.model, i, self.args)
+            accuracy_partial = eval_partial(valid_loader, self.model, i, self.args)
             macs, _ = get_model_complexity_info(self.model, (3, 32, 32), as_strings=False,
                                            print_per_layer_stat=False, verbose=False)
             gflops = 2*macs
