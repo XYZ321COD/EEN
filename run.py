@@ -110,6 +110,7 @@ def main():
             enn.inference(train_loader, valid_loader)
         else:
             enn.train(train_loader, valid_loader)
+        # enn.inference_nas(train_loader, valid_loader)
 
 
 if __name__ == "__main__":
