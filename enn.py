@@ -141,13 +141,6 @@ class ENN(object):
         logging.debug(f"Before Training gating networks student_model: \t Accuracy {accuracy_student}")
      
     def train(self, train_loader, valid_loader):
-        optimizers_list = []
-        ## Initialize the gating networks
-        for index, module_name in enumerate(self.model.replaced_modules):
-            get_module_by_name(self.model, module_name).initialize_gating_network(self.teacher_model.inputs[index][0], self.args)
-            optimizers_list += list(get_module_by_name(self.model, module_name).gating_network.parameters())
-        gating_networks_optimizer = torch.optim.Adam(optimizers_list)
-
         torch.autograd.set_detect_anomaly(True)
         save_config_file(self.writer.log_dir, self.args)
 
@@ -163,8 +156,6 @@ class ENN(object):
             for i, (images, labels) in enumerate(tqdm(train_loader)):
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
                 self.optimizer.zero_grad()
-                gating_networks_optimizer.zero_grad()
-                output = None
                 teacher_outputs = self.teacher_model(images)
                 if self.args.distill_type == 'per_accm':
                     loss_distill = 0
@@ -173,37 +164,12 @@ class ENN(object):
 
                 if self.args.distill_type == 'per_rsacm':
                     loss_distill = 0
-                    loss_cost_gn = 0 
                     for index, module_name in enumerate(self.model.replaced_modules):
-                        if self.args.train_gating_networks:
-                            if index == 0:
-                                get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
-                                gating_network_output =  get_module_by_name(self.model, module_name).gating_network(self.teacher_model.inputs[index][0])
-                                gating_network_output_index = torch.argmax(gating_network_output, dim=1)
-                                costs = torch.tensor([10485760.0, 2*10485760.0, 3*10485760.0, 4*10485760.0, 5*10485760.0, 6*10485760.0, 7*10485760.0, 8*10485760.0]).cuda()
-                                lists_of_outputs = []
-                                for index2, elements in enumerate(gating_network_output_index):
-                                    lists_of_outputs.append(get_module_by_name(self.model, module_name).x_list_tensor.permute(1,0,2,3,4)[index2][elements])
-                                output = torch.stack(lists_of_outputs)
-                                loss_cost_gn += torch.mean((gating_network_output * costs)) * 8
-                            else:
-                                get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
-                                gating_network_output =  get_module_by_name(self.model, module_name).gating_network(self.teacher_model.inputs[index][0])
-                                gating_network_output_index = torch.argmax(gating_network_output, dim=1)
-                                costs = torch.tensor([10485760.0, 2*10485760.0, 3*10485760.0, 4*10485760.0, 5*10485760.0, 6*10485760.0, 7*10485760.0, 8*10485760.0]).cuda()
-                                lists_of_outputs = []
-                                for index2, elements in enumerate(gating_network_output_index):
-                                    lists_of_outputs.append(get_module_by_name(self.model, module_name).x_list_tensor.permute(1,0,2,3,4)[index2][elements])
-                                output = torch.stack(lists_of_outputs)
-                                loss_cost_gn += torch.mean((gating_network_output * costs)) * 8
-                        else:
-                            get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
-                            for rsacm_block_output in get_module_by_name(self.model, module_name).x_list:
+                        get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
+                        for rsacm_block_output in get_module_by_name(self.model, module_name).x_list:
                                 loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
-                loss_cost_gn.backward()
-                # loss_distill.backward()
-                # self.optimizer.step()
-                gating_networks_optimizer.step()
+                loss_distill.backward()
+                self.optimizer.step()
                 
                 if n_iter % self.args.log_every_n_steps == 0:
                     self.writer.add_scalar('Loss', loss_distill, global_step=n_iter)            
