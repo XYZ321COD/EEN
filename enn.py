@@ -167,7 +167,7 @@ class ENN(object):
                     for index, module_name in enumerate(self.model.replaced_modules):
                         get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
                         for rsacm_block_output in get_module_by_name(self.model, module_name).x_list:
-                                loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
+                            loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
                 loss_distill.backward()
                 self.optimizer.step()
                 
