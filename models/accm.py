@@ -53,7 +53,6 @@ class AccmBlock(nn.Module):
         self.x_list = []
         x_copy = x.clone()
         x = self.rsacm_list[0](x_copy)
-        self.x_list_tensor = x
         self.x_list.append(x)
         for i in range(1, self.number_of_rsacm):
             rsacm_output = self.rsacm_list[i](x_copy)
