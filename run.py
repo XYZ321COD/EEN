@@ -57,7 +57,9 @@ parser.add_argument('--distill_type', default='',
                     help='distill type', choices=['per_accm', 'per_rsacm'])
 parser.add_argument('--inference', action="store_true",help="train_rsacm")
 parser.add_argument('--load_student', action="store_true",help="train_rsacm")
-
+parser.add_argument('--train_gating_networks',  action="store_true",help="train_rsacm")
+parser.add_argument('--weight_of_cost_loss', default=1, type=float, 
+                    metavar='weight_of_cost_loss', help='weight_of_cost_loss', dest='weight_of_cost_loss')
 
 
 def main():
@@ -95,7 +97,7 @@ def main():
     teacher_model.load_state_dict(checkpoint['model_state'])
     
     example_input = next(iter(train_loader))[0][:1]
-    student_model = accmize_from(teacher_model, 0.25, args.number_of_rsacm, example_input)
+    student_model = accmize_from(teacher_model, 0.25, args.number_of_rsacm, example_input, args)
     optimizer = torch.optim.Adam(student_model.parameters(), args.lr, weight_decay=0)
 
     if args.load_student:
@@ -106,11 +108,11 @@ def main():
     #  It’s a no-op if the 'gpu_index' argument is a negative integer or None.
     with torch.cuda.device(args.gpu_index):
         enn = ENN(model=student_model, optimizer=optimizer, args=args)
+        enn.train_gating_networks(train_loader, valid_loader)
         if args.inference:
             enn.inference(train_loader, valid_loader)
         else:
             enn.train(train_loader, valid_loader)
-        # enn.inference_nas(train_loader, valid_loader)
 
 
 if __name__ == "__main__":

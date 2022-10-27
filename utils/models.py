@@ -18,7 +18,7 @@ def filter_condition(m: nn.Module):
 
 
 def accmize_from(original_model: nn.Module, rsacm_flops_factor: float, number_of_rsacms: int,
-                 example_input: torch.Tensor):
+                 example_input: torch.Tensor, args):
     training = original_model.training
     original_model.eval()
     model = deepcopy(original_model)
@@ -57,7 +57,7 @@ def accmize_from(original_model: nn.Module, rsacm_flops_factor: float, number_of
             rsacm_cost, _ = get_model_complexity_info(rsacm, tuple(module_activations[name].size())[1:],
                                                       as_strings=False, print_per_layer_stat=False, verbose=False)
             # print(f'RSACM cost for {name} for C_h {candidate_c_h}: {rsacm_cost}')
-        replacement = AccmBlock(original_conv, candidate_c_h, number_of_rsacms)
+        replacement = AccmBlock(original_conv, candidate_c_h, number_of_rsacms, args, rsacm_cost)
         set_module_by_name(model, name, replacement)
         print(f'Replacing {name} - original cost: {original_conv_cost}, RSACM cost: {rsacm_cost}')
     model.train(training)

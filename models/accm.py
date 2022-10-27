@@ -1,6 +1,7 @@
 
 import torch.nn as nn
-
+import torch
+from models.gating_network import Gating_Network
 class RsacmBlock(nn.Module):
     def __init__(self, input_layer: nn.Conv2d, h_channels: int):
         super().__init__()
@@ -30,23 +31,42 @@ class RsacmBlock(nn.Module):
 
 
 class AccmBlock(nn.Module):
-    def __init__(self, input_layer, h_channels, number_of_rsacm):
+    def __init__(self, input_layer, h_channels, number_of_rsacm, args, rsacm_cost):
         super().__init__()
         self.h_channels = h_channels
         self.number_of_rsacm = number_of_rsacm
+        self.args = args
         self.rsacm_list = nn.ModuleList(
             [(RsacmBlock(input_layer, self.h_channels)) for i in range(0, self.number_of_rsacm)])
+        self.rsacm_cost = rsacm_cost
+
+    def initialize_gating_network(self, activation, args):
+        self.gating_network =  Gating_Network(activation, args)
+        self.optimizer_for_gating_network = torch.optim.Adam(self.gating_network.parameters(), args.lr, weight_decay=0)
 
     def forward(self, x):
+        if self.args.train_gating_networks:
+            gating_network_output =  self.gating_network(x)
+            gating_network_output_index = torch.argmax(gating_network_output, dim=1)
+            costs = torch.tensor([self.rsacm_cost*i for i in range(1,self.number_of_rsacm+1)]).cuda()
         x = x.detach() # Detach x make sure that gradient for this layer won't flow to previous layers.
         self.x_list = []
         x_copy = x.clone()
         x = self.rsacm_list[0](x_copy)
+        self.x_list_tensor = x
         self.x_list.append(x)
         for i in range(1, self.number_of_rsacm):
             rsacm_output = self.rsacm_list[i](x_copy)
             self.x_list.append(rsacm_output + x.detach()) # Detach x before adding it to the sum 
             x = rsacm_output + x
+        self.x_list_tensor = torch.stack((self.x_list))
+        if self.args.train_gating_networks:
+            lists_of_outputs = []
+            for index2, elements in enumerate(gating_network_output_index):
+                lists_of_outputs.append(self.x_list_tensor.permute(1,0,2,3,4)[index2][elements])
+            output = torch.stack(lists_of_outputs)
+            self.loss_cost_gn = torch.sum((gating_network_output * costs)) / (gating_network_output.shape[0]*self.rsacm_cost*(self.number_of_rsacm))
+            return output
         return x
 
     def override_forward(self, number_of_rsacm_to_use):
