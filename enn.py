@@ -7,13 +7,9 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from utils.utils import get_module_by_name, save_config_file, save_checkpoint, eval, eval_partial, calculated_complexity
 from models.resnet import load_teacher_model
-from models.gating_network import Gating_Network, initialized_gating_networks
-import glob
-from copy import copy
 from ptflops import get_model_complexity_info
 import matplotlib.pyplot as plt 
 import numpy as np 
-from models.accm import AccmBlock
 
 class ENN(object):
 
@@ -36,7 +32,7 @@ class ENN(object):
 
 
 
-    def inference_nas(self, train_loader, valid_loader):
+    def inference_nas(self, valid_loader):
         for idx, value in enumerate(self.model.replaced_modules):
             for number_of_rsacm in range(1,self.args.number_of_rsacm+1):
                 with torch.no_grad():
@@ -50,72 +46,63 @@ class ENN(object):
 
 
     def inference(self, train_loader, valid_loader):
-        with torch.no_grad():
-            losses_per_layers_student_valid = {module_name: [[] for i in range(0,self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
-            for i, (images, labels) in enumerate(tqdm(valid_loader)):
-                    images, labels = images.to(self.args.device), labels.to(self.args.device)
-                    self.teacher_model(images)
-                    loss_distill = 0
-                    for index, module_name in enumerate(self.model.replaced_modules):
-                        get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
-                        for rsacm_index, rsacm_block_output in enumerate(get_module_by_name(self.model, module_name).x_list):
-                            loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
-                            losses_per_layers_student_valid[module_name][rsacm_index].append(self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index]))
-            # print(losses_per_layers_student)
-            losses_per_layers_student_mean_valid = {module_name: [(sum(losses_per_layers_student_valid[module_name][i]) / len(losses_per_layers_student_valid[module_name][i])).item() for i in range(0, self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
 
-            losses_per_layers_student_train = {module_name: [[] for i in range(0,self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
-            for i, (images, labels) in enumerate(tqdm(train_loader)):
-                    images, labels = images.to(self.args.device), labels.to(self.args.device)
-                    self.teacher_model(images)
-                    loss_distill = 0
-                    for index, module_name in enumerate(self.model.replaced_modules):
-                        get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
-                        for rsacm_index, rsacm_block_output in enumerate(get_module_by_name(self.model, module_name).x_list):
-                            loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
-                            losses_per_layers_student_train[module_name][rsacm_index].append(self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index]))
-            # print(losses_per_layers_student)
-            losses_per_layers_student_mean_train = {module_name: [(sum(losses_per_layers_student_train[module_name][i]) / len(losses_per_layers_student_train[module_name][i])).item() for i in range(0, self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
-            for module_name in losses_per_layers_student_mean_valid:
-                # Make a random dataset:
-                rsacms = range(1, self.args.number_of_rsacm+1)
-                loss_value_valid = losses_per_layers_student_mean_valid[module_name]
-                loss_value_train = losses_per_layers_student_mean_train[module_name]
-                y_pos = np.arange(len(rsacms))
-                width = 0.3       
+        def calculated_losses_per_layers(dataset):
+            with torch.no_grad():
+                losses_per_layers_student = {module_name: [[] for i in range(0,self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
+                for i, (images, labels) in enumerate(tqdm(dataset)):
+                        images, labels = images.to(self.args.device), labels.to(self.args.device)
+                        self.teacher_model(images)
+                        loss_distill = 0
+                        for index, module_name in enumerate(self.model.replaced_modules):
+                            get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
+                            for rsacm_index, rsacm_block_output in enumerate(get_module_by_name(self.model, module_name).x_list):
+                                loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
+                                losses_per_layers_student[module_name][rsacm_index].append(self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index]))
+                losses_per_layers_student_mean = {module_name: [(sum(losses_per_layers_student[module_name][i]) / len(losses_per_layers_student[module_name][i])).item() for i in range(0, self.args.number_of_rsacm)] for module_name in self.model.replaced_modules}
+                return losses_per_layers_student_mean
 
-                # Create bars
-                plt.bar(y_pos, loss_value_valid, width, label='valid')
-                plt.bar(y_pos+width, loss_value_train, width, label='train')
+        losses_per_layers_student_mean_valid, losses_per_layers_student_mean_train = calculated_losses_per_layers(valid_loader), calculated_losses_per_layers(train_loader)
 
-                # Create names on the x-axis
-                plt.legend(loc='best')
-                plt.xticks(y_pos, rsacms)
-                plt.title(f'MSELoss in {module_name}')
-                plt.plot()
-                plt.xlabel('Number of RSACM')
-                plt.ylabel('MSELoss value')
-                plt.savefig(f'./graphs/{module_name}.png')
-                plt.clf()
+        for module_name in losses_per_layers_student_mean_valid:
+            # Make a random dataset:
+            rsacms = range(1, self.args.number_of_rsacm+1)
+            loss_value_valid = losses_per_layers_student_mean_valid[module_name]
+            loss_value_train = losses_per_layers_student_mean_train[module_name]
+            y_pos = np.arange(len(rsacms))
+            width = 0.3       
+
+            # Create bars
+            plt.bar(y_pos, loss_value_valid, width, label='valid')
+            plt.bar(y_pos+width, loss_value_train, width, label='train')
+
+            # Create names on the x-axis
+            plt.legend(loc='best')
+            plt.xticks(y_pos, rsacms)
+            plt.title(f'MSELoss in {module_name}')
+            plt.plot()
+            plt.xlabel('Number of RSACM')
+            plt.ylabel('MSELoss value')
+            plt.savefig(f'./graphs/{module_name}.png')
+            plt.clf()
+
 
 
     def train_gating_networks(self, train_loader, valid_loader):
 
         accuracy_student = eval(valid_loader, self.model, self.args)
         logging.debug(f"Before Training gating networks student_model: \t Accuracy {accuracy_student}")
-        optimizers_list = []
+        gating_networks_parameters = []
         ## Initialize the gating networks
         for index, module_name in enumerate(self.model.replaced_modules):
             get_module_by_name(self.model, module_name).initialize_gating_network(self.teacher_model.inputs[index][0], self.args)
             get_module_by_name(self.model, module_name).args.train_gating_networks = True
-            optimizers_list += list(get_module_by_name(self.model, module_name).gating_network.parameters())
-        gating_networks_optimizer = torch.optim.Adam(optimizers_list)
+            gating_networks_parameters += list(get_module_by_name(self.model, module_name).gating_network.parameters())
+        gating_networks_optimizer = torch.optim.Adam(gating_networks_parameters)
 
         torch.autograd.set_detect_anomaly(True)
         save_config_file(self.writer.log_dir, self.args)
         for i, (images, labels) in enumerate(tqdm(train_loader)):
-            if i == 300:
-                break
             images, labels = images.to(self.args.device), labels.to(self.args.device)
             output = self.model(images)
             loss_cost_classification = self.criterion(output, labels)
@@ -124,7 +111,7 @@ class ENN(object):
             for index, module_name in enumerate(self.model.replaced_modules):
                 loss_cost_gn += get_module_by_name(self.model, module_name).loss_cost_gn
             loss_summ = loss_cost_classification + self.args.weight_of_cost_loss*(loss_cost_gn)
-            if i % 100 == 0:
+            if i % 50 == 0:
                 print(f'CE {loss_cost_classification} and cost {loss_cost_gn / len((self.model.replaced_modules))}')
             loss_summ.backward()
             gating_networks_optimizer.step()
@@ -136,10 +123,11 @@ class ENN(object):
             'optimizer': self.optimizer.state_dict(),
         }, is_best=False, filename=os.path.join(self.writer.log_dir, checkpoint_name))
         logging.info(f"Model checkpoint and metadata has been saved at {self.writer.log_dir}.")
-
         accuracy_student = eval(valid_loader, self.model, self.args)
         logging.debug(f"Before Training gating networks student_model: \t Accuracy {accuracy_student}")
      
+
+
     def train(self, train_loader, valid_loader):
         torch.autograd.set_detect_anomaly(True)
         save_config_file(self.writer.log_dir, self.args)
@@ -157,17 +145,11 @@ class ENN(object):
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
                 self.optimizer.zero_grad()
                 teacher_outputs = self.teacher_model(images)
-                if self.args.distill_type == 'per_accm':
-                    loss_distill = 0
-                    for key, value in self.model.activation.items():
-                        loss_distill += self.criterion_distilation(self.model.activation[key], self.teacher_model.activation[key])
-
-                if self.args.distill_type == 'per_rsacm':
-                    loss_distill = 0
-                    for index, module_name in enumerate(self.model.replaced_modules):
-                        get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
-                        for rsacm_block_output in get_module_by_name(self.model, module_name).x_list:
-                            loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
+                loss_distill = 0
+                for index, module_name in enumerate(self.model.replaced_modules):
+                    get_module_by_name(self.model, module_name)(self.teacher_model.inputs[index][0])
+                    for rsacm_block_output in get_module_by_name(self.model, module_name).x_list:
+                        loss_distill += self.criterion_distilation(rsacm_block_output, self.teacher_model.activation[index])
                 loss_distill.backward()
                 self.optimizer.step()
                 
@@ -175,8 +157,6 @@ class ENN(object):
                     self.writer.add_scalar('Loss', loss_distill, global_step=n_iter)            
                 n_iter += 1
                 
-            # if self.args.train_rsacm:
-            #     self.model.override_forward_for_accm_blocks(self.args.number_of_rsacm)
             accuracy = eval(valid_loader, self.model, self.args)
             logging.debug(f"Epoch: {epoch_counter}\Loss: {loss_distill}\t")
             logging.debug(f"Epoch: {epoch_counter}\t Accuracy {accuracy}")

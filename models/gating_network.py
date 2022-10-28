@@ -14,6 +14,7 @@ class Gating_Network(nn.Module):
 
     def forward(self, x):
         x = self.first_conv(x)
+        x = nn.ReLU()(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
         x = torch.nn.functional.gumbel_softmax(x, tau=1, hard=True)
