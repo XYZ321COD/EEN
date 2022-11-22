@@ -1,9 +1,6 @@
 import torchvision.models as models
-from utils.models import get_module_by_name
-from models.accm import AccmBlock
+from utils.utils import get_module_by_name
 import torch
-from copy import copy
-import glob
 from itertools import chain
 from typing import List
 
@@ -131,19 +128,6 @@ class ResNet(nn.Module):
         x = self.linear(x)
         return x
 
-def load_teacher_model(args):
-    args_copy = copy(args)
-    args_copy.accm = False
-    
-    teacher_model = ResNet50().cuda()
-    model_file = glob.glob("./pre-trained/resnet_bartek" + "/*.pth")
-    print(f'Using Pretrained model {model_file[0]} for the teacher model')
-    checkpoint = torch.load(model_file[0])
-    teacher_model.load_state_dict(checkpoint['model_state'])
-    for param in teacher_model.parameters():
-        param.requires_grad = False
-    return teacher_model
-
 def ResNet18(num_classes: int = 10):
     return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
 
@@ -162,3 +146,36 @@ def ResNet101(num_classes: int = 10):
 
 def ResNet152(num_classes: int = 10):
     return ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes)
+
+# import torchvision.models as models
+
+
+
+# class ResNet_torch(torch.nn.Module):
+
+#     def __init__(self):
+#         super().__init__()
+#         self.backbone = models.resnet18(pretrained=True)
+#         self.activation = {}
+#         self.inputs = {}
+        
+#     def get_activation(self, name):
+#             def hook(model, input, output):
+#                 self.activation[name] = output
+#                 self.inputs[name] = input
+
+#             return hook
+
+#     def register_all_hooks(self):
+#         for idx, value in enumerate(self.replaced_modules):
+#             get_module_by_name(self, value).register_forward_hook(self.get_activation(idx))
+
+#     def override_forward_for_accm_blocks(self, number_of_rsacm):
+#         for idx, value in enumerate(self.replaced_modules):
+#             get_module_by_name(self, value).override_forward(number_of_rsacm)
+
+#     def forward(self, x):
+#         return self.backbone(x)
+
+# def ResNet50_torch():
+#     return ResNet_torch()

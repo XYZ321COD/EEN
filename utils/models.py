@@ -4,6 +4,8 @@ from ptflops import get_model_complexity_info
 from torch import nn as nn
 from utils.utils import find_module_names, get_module_by_name, set_module_by_name
 from models.accm import RsacmBlock, AccmBlock
+from models.resnet import ResNet50
+import glob
 
 def filter_condition(m: nn.Module):
     allow = False
@@ -59,7 +61,42 @@ def accmize_from(original_model: nn.Module, rsacm_flops_factor: float, number_of
             # print(f'RSACM cost for {name} for C_h {candidate_c_h}: {rsacm_cost}')
         replacement = AccmBlock(original_conv, candidate_c_h, number_of_rsacms, args, rsacm_cost)
         set_module_by_name(model, name, replacement)
+        replacement.old_conv_cost = original_conv_cost
+        replacement.rsacm_cost = rsacm_cost
         print(f'Replacing {name} - original cost: {original_conv_cost}, RSACM cost: {rsacm_cost}')
     model.train(training)
     original_model.train(training)
     return model
+
+def load_teacher_model(args):
+    teacher_model = ResNet50().cuda()
+    model_file = glob.glob("./pre-trained/teacher_network/ResNet" + "/*.pth")
+    print(f'Using Pretrained model {model_file[0]} for the teacher model')
+    checkpoint = torch.load(model_file[0])
+    teacher_model.load_state_dict(checkpoint['model_state'])
+    for param in teacher_model.parameters():
+        param.requires_grad = False
+    return teacher_model
+
+def load_student_model(args, student_model, teacher_model):
+    if args.training_type in ['inference', 'train_gating_networks', 'calculate_complexity', 'eval_gating_networks', 'inference_nas']:
+        if args.training_type == 'train_gating_networks':
+            model_file = glob.glob(f"./pre-trained/student_network_{args.compresion_rate}/without_gating_networks" + "/*.tar")
+        else:
+            initialize_gating_networks(student_model, teacher_model, args)
+            model_file = glob.glob(f"./pre-trained/student_network_{args.compresion_rate}/with_gating_networks" + "/*.tar")
+
+        print(f'Using Pretrained model {model_file[0]} for the student model')
+        checkpoint = torch.load(model_file[0])
+        student_model.load_state_dict(checkpoint['state_dict'])
+
+def initialize_gating_networks(student_model, teacher_model, args):
+    for index, module_name in enumerate(student_model.replaced_modules):
+        get_module_by_name(student_model, module_name).initialize_gating_network(teacher_model.inputs[index][0], args)
+        get_module_by_name(student_model, module_name).args.train_gating_networks = True
+
+def get_gating_netowrks_parameters(student_model):
+    for index, module_name in enumerate(student_model.replaced_modules):
+        gating_networks_parameters += list(get_module_by_name(student_model, module_name).gating_network.parameters())
+    return gating_networks_parameters
+
