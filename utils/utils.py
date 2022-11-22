@@ -8,6 +8,8 @@ import yaml
 from torch import nn as nn
 from ptflops import get_model_complexity_info
 import logging
+import numpy as np
+import matplotlib.pyplot as plt
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
@@ -73,8 +75,8 @@ def eval(valid_loader, model, args):
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
-    print(f'Accuracy of the network on the test images: {100 * correct // total} %')
-    return 100 * correct // total
+    print(f'Accuracy of the network on the test images: {round(100 * correct / total, 2)} %')
+    return round(100 * correct / total, 2)
 
 
 def eval_partial(valid_loader, model, number_of_rscam_to_eval, args):
@@ -107,3 +109,38 @@ def calculated_complexity(student_model, teacher_model):
     gflops = 2*macs
     logging.debug(f"Computational complexity for teacher model: {gflops} FLOPS") 
 
+
+def generate_loss_histograms(args, losses_per_layers_student_mean_valid, losses_per_layers_student_mean_train):
+    for module_name in losses_per_layers_student_mean_valid:
+        rsacms = range(1, args.number_of_rsacm+1)
+        loss_value_valid = losses_per_layers_student_mean_valid[module_name]
+        loss_value_train = losses_per_layers_student_mean_train[module_name]
+        y_pos = np.arange(len(rsacms))
+        width = 0.3       
+
+        # Create bars
+        plt.bar(y_pos, loss_value_valid, width, label='valid')
+        plt.bar(y_pos+width, loss_value_train, width, label='train')
+
+        # Create names on the x-axis
+        plt.legend(loc='best')
+        plt.xticks(y_pos, rsacms)
+        plt.title(f'MSELoss in {module_name}')
+        plt.plot()
+        plt.xlabel('Number of RSACM')
+        plt.ylabel('MSELoss value')
+        plt.savefig(f'./graphs/{module_name}.png')
+        plt.clf()
+
+def visualize_loss_diff(histograms_for_layers):
+    for module_name in histograms_for_layers:
+        # Make a random dataset:
+        plt.hist(histograms_for_layers[module_name], bins = [0,1,2,3,4,5,6,7]) 
+        # Create names on the x-axis
+        plt.legend(loc='best')
+        plt.title(f'RSACMs used in {module_name}')
+        plt.plot()
+        plt.xlabel('Index of RSACM')
+        plt.ylabel('Number RSACMs used for example')
+        plt.savefig(f'./graphs/{module_name}.png')
+        plt.clf()
